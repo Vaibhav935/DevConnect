@@ -1,5 +1,5 @@
-import { chatEventHandler } from "./chatEventHandler";
-import { webRTCHandler } from "./webRTCHandler";
+import { chatEventHandler } from "./chatEventHandler.js";
+import { webRTCHandler } from "./webRTCHandler.js";
 
 export const socketConnectionHandler = (io) => {
   io.on("connection", (socket) => {
