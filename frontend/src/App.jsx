@@ -13,7 +13,6 @@ const App = () => {
   } = useResizableHook();
 
   const socket = useRef(null);
-  socket.current = io("http://localhost:3000");
 
   const [message, setMessage] = useState("");
   const [allMessages, setAllMessages] = useState([]);
@@ -26,7 +25,12 @@ const App = () => {
   const [localVideoStream, setLocalVideoStream] = useState(null);
   const localVideoRef = useRef(null);
 
+  const [remoteVideoStream, setRemoteVideoStream] = useState(null);
+  const remoteVideoRef = useRef(null);
+
   useEffect(() => {
+    socket.current = io("http://localhost:3000");
+
     socket.current.on("connect", () => {
       // console.log("client --", socket.current.id);
       setSocketId(socket.current.id);
@@ -48,6 +52,21 @@ const App = () => {
     // step 4. offer dusre guy ko receive ho gaya
     socket.current.on("offer", async (data) => {
       remoteId.current = data.sender;
+
+      // step 13 part 2 - track set krna for remote pc
+      // this is imp to set media on track on remote peer
+      let streams = localVideoStream;
+
+      if (!localVideoStream) {
+        streams = await getUserMedia();
+      }
+
+      setUpPC();
+
+      streams
+        .getTracks()
+        .forEach((track) => peerConnection.current.addTrack(track, streams));
+
       await peerConnection.current.setRemoteDescription(data.offer);
 
       // step 5 => ab ans create krna hai
@@ -72,12 +91,20 @@ const App = () => {
     // this is now second guy
     // step 10 => now this is ice-candidate received from first guy
     socket.current.on("ice-candidate", async (data) => {
-      if( data.candidate ) {
-        await peerConnection.current.addIceCandidate(new RTCIceCandidate(data.candidate))
+      console.log("inside ice-candidate");
+      if (peerConnection.current && data.candidate) {
+        try {
+          await peerConnection.current.addIceCandidate(
+            new RTCIceCandidate(data.candidate),
+          );
+          console.log("Ice candidate set successfull");
+        } catch (error) {
+          console.log("ice candidate not set not ready for connection");
+        }
 
-        //  after this all the process is done now browser will automatically do it for us 
+        //  after this all the process is done now browser will automatically do it for us
       }
-    })
+    });
 
     socket.current.on("disconnect", (reason) => {
       console.log("disconnected: ", reason);
@@ -109,11 +136,25 @@ const App = () => {
   // ============================= Video things will start from here ================================
 
   const sendOffer = async () => {
+    if (!targetId) throw new Error("Target Id is missing");
+
     remoteId.current = targetId;
+
+    // step 13 part 1 -- track set krna for our pc
+    // offer bhjne se phle media track me set krne ke liye this function is imp to call here
+    let streams = localVideoStream;
+
+    if (!localVideoStream) {
+      streams = await getUserMedia();
+    }
+
     setUpPC();
 
-    // step 2 -> create an offer
+    streams
+      .getTracks()
+      .forEach((track) => peerConnection.current.addTrack(track, streams));
 
+    // step 2 -> create an offer
     const offer = await peerConnection.current.createOffer();
     await peerConnection.current.setLocalDescription(offer);
 
@@ -132,47 +173,68 @@ const App = () => {
 
     //  ab ye step 8 ke bad hai
     // jab ice candidate mil jyga this will run automatically
-
     // step 9 --
     peerConnection.current.onicecandidate = (event) => {
       if (event.candidate) {
-        socket.emit("ice-candidate", {
+        socket.current.emit("ice-candidate", {
           targetId: remoteId.current,
           candidate: event.candidate,
         });
       }
     };
+
+    //  step 12 - automatic after step 11
+    // now after addTract,getTrack this will automatically fire and set remote media
+    console.log("offer send");
+    try {
+      peerConnection.current.ontrack = (event) => {
+        console.log("setting remote stream");
+        setRemoteVideoStream(event.streams[0]);
+        remoteVideoRef.current.srcObject = event.streams[0];
+      };
+    } catch (error) {
+      console.log("error in setting remote vdo");
+    }
   };
 
-
+  //  step 11 -- Now first we will give permission to our camera first
+  // Till now ice-candidate are set and exchanged now we need to add media on track
   let isCameraOn = false;
   const getUserMedia = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true});
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: true,
+      });
       setLocalVideoStream(stream);
       localVideoRef.current.srcObject = stream;
-      isCameraOn = true
+      // setRemoteVideoStream(stream);
+      // remoteVideoRef.current.srcObject = stream
+      isCameraOn = true;
 
-      
+      // stream
+      //   .getTracks()
+      //   .forEach((track) => peerConnection.current.addTrack(track, stream));
+
+      // here we are setting out media on track of ice-candidate
+      return stream;
     } catch (error) {
-      console.log("problem in getting media", error)
-      alert("Problem in getting media")
+      console.log("problem in getting media", error);
+      alert("Problem in getting media");
     }
-  }
+  };
 
   const toggleCamera = () => {
     const videoTrack = localVideoStream.getVideoTracks()[0];
-    if(videoTrack) {
-      videoTrack.enabled = !videoTrack.enabled
-      videoTrack.stop()
+    if (videoTrack) {
+      videoTrack.enabled = !videoTrack.enabled;
+      videoTrack.stop();
       localVideoRef.current.srcObject = null;
-      isCameraOn = false
+      isCameraOn = false;
     }
-  }
+  };
 
-  const toggleMic = () => {
-
-  }
+  const toggleMic = () => {};
 
   return (
     <>
@@ -255,17 +317,36 @@ const App = () => {
           <div className="border h-full rounded-2xl p-4 flex flex-col gap-5">
             <div className="flex-1 relative">
               <div className="h-full border rounded-2xl p-2 ">
-                Stranger Video
+                {/* Stranger Video */}
+                <video
+                  className="border h-full w-full rounded-2xl border-red-600"
+                  ref={remoteVideoRef}
+                  autoPlay
+                  playsInline
+                />
               </div>
               <div className=" absolute right-5 bottom-5 rounded-2xl h-45 w-60 overflow-hidden  cursor-pointer">
-                <video draggable="true" className="h-full w-500 border rounded-2xl" ref={localVideoRef} autoPlay playsInline muted />
+                <video
+                  draggable="true"
+                  className="h-full w-500 border rounded-2xl"
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                />
               </div>
             </div>
             <div className="border py-2 rounded-2xl flex items-center justify-center gap-5 ">
-              <div onClick={toggleCamera} className="px-4 py-2 border cursor-pointer rounded-full">
+              <div
+                onClick={toggleCamera}
+                className="px-4 py-2 border cursor-pointer rounded-full"
+              >
                 <Video color="#000000" />
               </div>
-              <div onClick={toggleMic} className="px-4 py-2 border cursor-pointer rounded-full">
+              <div
+                onClick={toggleMic}
+                className="px-4 py-2 border cursor-pointer rounded-full"
+              >
                 <Mic color="#000000" />
               </div>
               <div className="px-4 py-2 border cursor-pointer rounded-full"></div>
