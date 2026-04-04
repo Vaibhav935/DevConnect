@@ -4,10 +4,9 @@ import useResizableHook from "../hooks/useResizableHook";
 import useChats from "../hooks/useChats";
 import useSocket from "../hooks/useSocket";
 import useWebRTC from "../hooks/useWebRTC";
-import useMedia from "../hooks/useMedia";
 
 const ChatSection = () => {
-  const { setMessage, targetId, setTargetId, allMessages } =
+  const { setMessage, targetId, setTargetId, allMessages, getMedia } =
     useContext(MyStore);
 
   const { leftWidth } = useResizableHook();
@@ -15,7 +14,6 @@ const ChatSection = () => {
   const { sendMessage } = useChats();
   const { socketId } = useSocket();
   const { sendOffer } = useWebRTC();
-  const { getMedia } = useMedia();
 
   return (
     <div style={{ width: leftWidth }} className=" p-3 min-w-80">

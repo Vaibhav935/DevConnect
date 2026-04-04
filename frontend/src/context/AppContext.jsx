@@ -1,4 +1,5 @@
 import React, { createContext, useRef, useState } from "react";
+import useMedia from "../hooks/useMedia";
 
 export const MyStore = createContext();
 
@@ -8,6 +9,8 @@ const AppContext = ({ children }) => {
   const [targetId, setTargetId] = useState("");
 
   const remoteId = useRef(null);
+
+  const media = useMedia();
 
   return (
     <MyStore.Provider
@@ -19,6 +22,7 @@ const AppContext = ({ children }) => {
         targetId,
         setTargetId,
         remoteId,
+        ...media,
       }}
     >
       {children}

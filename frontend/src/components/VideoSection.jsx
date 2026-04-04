@@ -1,10 +1,12 @@
 import { Mic, Video } from "lucide-react";
-import useMedia from "../hooks/useMedia";
 import useWebRTC from "../hooks/useWebRTC";
+import { useContext } from "react";
+import { MyStore } from "../context/AppContext";
 
 const VideoSection = () => {
-  const { localVideoRef } = useMedia();
   const { remoteVideoRef } = useWebRTC();
+
+  const { localVideoRef } = useContext(MyStore);
 
   return (
     <div className="flex-1 p-3 min-w-180">
